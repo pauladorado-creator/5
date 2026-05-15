@@ -44,9 +44,36 @@ export default function ParaTi() {
   const [notifs, setNotifs] = useState(NOTIFS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState<null | "info" | "privacy" | "opinions">(null);
+  const [ingredientQuery, setIngredientQuery] = useState("");
   const season = getSeason();
   const { cookedIds, reload: reloadCooked } = useCooked();
   const { filters, setFilters, sort, setSort } = useSettings();
+
+  // Auto-hide fridge bar on scroll
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const lastY = useRef(0);
+  const headerVisible = useRef(true);
+  const headerAnim = useRef(new Animated.Value(1)).current;
+  const onScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (e: any) => {
+        const y = e.nativeEvent.contentOffset.y;
+        const dy = y - lastY.current;
+        if (dy > 8 && y > 40 && headerVisible.current) {
+          headerVisible.current = false;
+          Animated.timing(headerAnim, { toValue: 0, duration: 180, useNativeDriver: false }).start();
+        } else if ((dy < -8 || y <= 20) && !headerVisible.current) {
+          headerVisible.current = true;
+          Animated.timing(headerAnim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
+        }
+        lastY.current = y;
+      },
+    },
+  );
 
   const load = async () => {
     if (tab === "parati") {
