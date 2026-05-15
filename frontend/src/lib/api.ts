@@ -18,8 +18,8 @@ export const COLORS = {
   black: "#000000",
 };
 
-export const LOGO_URL = "https://customer-assets.emergentagent.com/job_82473c81-dafc-4adc-b4cd-0b023c12dd7a/artifacts/kple6ezk_FRIGO-%20LOGO.png";
-export const FRIDGE_URL = "https://customer-assets.emergentagent.com/job_82473c81-dafc-4adc-b4cd-0b023c12dd7a/artifacts/8g0yzxvf_frigowebinicio.jpg";
+export const LOGO_URL = `${BASE}/api/static/assets/logo.png`;
+export const FRIDGE_URL = `${BASE}/api/static/assets/fridge.jpg`;
 
 export const MAGNETS: Record<string, string> = {
   "Andalucía": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/wyybhfc5_ANDALUCIA%20IMAN.png",

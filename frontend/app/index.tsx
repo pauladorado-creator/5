@@ -100,7 +100,7 @@ export default function Splash() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.black },
+  root: { flex: 1, backgroundColor: COLORS.white },
   fridge: {
     position: "absolute",
     top: 0,
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   btnText: { fontSize: 15, fontWeight: "700", color: COLORS.text, letterSpacing: 0.3 },
   enterBtn: {
     alignSelf: "center",
-    backgroundColor: "rgba(0,0,0,0.85)",
+    backgroundColor: COLORS.text,
     paddingHorizontal: 36,
     paddingVertical: 14,
     borderRadius: 30,
