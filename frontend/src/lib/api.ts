@@ -2,6 +2,13 @@ import { storage } from "@/src/utils/storage";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
+export function recipeImageUrl(path?: string | null): string | null {
+  if (!path) return null;
+  if (path.startsWith("http")) return path;
+  // backend exposes static at /api/static/...
+  return `${BASE}${path}`;
+}
+
 export const COLORS = {
   white: "#FFFFFF",
   gray: "rgb(230,230,230)",
@@ -24,12 +31,14 @@ export const MAGNETS: Record<string, string> = {
   "Castilla-La Mancha": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/twp2zbqv_castilla%20la%20mancha.png",
   "Castilla y León": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/w0fgu3va_castilla%20y%20leon.png",
   "Cataluña": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/vudp09mi_barcelona.png",
+  "Comunidad Valenciana": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/pl7rnyry_valencia.png",
   "Extremadura": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/moder595_EXTREMADURA.png",
   "Galicia": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/zto6joxr_galicia.png",
   "La Rioja": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/hn7ecab4_IMAN%20LA%20RIOJA%20CERAMICA.png",
-  "Madrid": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/cmh3qen1_madrid2.png",
+  "Madrid": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/otgdit7g_madrid2.png",
   "Murcia": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/pzohg3h7_murcia.png",
-  "Navarra": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/j2om5p4x_navarra%20iman_.png",
+  "Navarra": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/9usw4pah_navarra%20iman_.png",
+  "País Vasco": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/rqt5c1sy_pais%20vasco.png",
 };
 
 export type User = { id: string; email: string; username: string; magnets: string[]; created_at: string };
@@ -37,7 +46,7 @@ export type IntoleranceMode = "hide" | "warn" | "substitute";
 export type Recipe = {
   id: string; nombre: string; ccaa: string; tiempo: string; dificultad: string;
   raciones: string; temporada: string; descripcion: string;
-  precio?: number; favoritos?: number;
+  precio?: number; favoritos?: number; image_url?: string;
   ingredientes: string[]; preparacion: string[];
   alergenos: { gluten: boolean; lactosa: boolean; frutos_secos: boolean; apto_vegano: boolean };
 };

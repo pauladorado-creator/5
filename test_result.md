@@ -249,6 +249,17 @@ test_plan:
 agent_communication:
     -agent: "testing"
     -message: |
+      Iter3 quick regression PASS (9/9) on https://frigo-recipes-3.preview.emergentagent.com.
+        - GET /api/ → recipes=50 (was 48). Backend reseed log confirms "Reseeded 50 recipes (version 3)".
+        - GET /api/recipes?ccaa=Comunidad Valenciana → 3 recipes exactly: Arroz Meloso de Pollo, Fideuà, Arroz a Banda. Each carries image_url string starting with "/api/static/recipes/recipe_".
+        - GET /api/static/recipes/recipe_01.jpg → 200, content-type image/jpeg, 156547 bytes. HEAD also 200 image/jpeg.
+        - GET /api/static/recipes/recipe_50.jpg → 200, content-type image/jpeg, 472943 bytes.
+        - GET /api/ccaa → 17 entries, contains "Comunidad Valenciana", does NOT contain "Ceuta" or "Melilla". Full list: ['Andalucía','Aragón','Asturias','Baleares','Canarias','Cantabria','Castilla-La Mancha','Castilla y León','Cataluña','Comunidad Valenciana','Extremadura','Galicia','La Rioja','Madrid','Murcia','Navarra','País Vasco'].
+        - GET /api/recipes/{first_id} → 200 with image_url present ("/api/static/recipes/recipe_01.jpg").
+        - POST /api/auth/login {"email":"backend.test@frigo.app"} (prior user) → 200, id=d56d3947-…; POST /api/cart with two kind="personal" items round-trips correctly (kind preserved as "personal", recipe_name=None).
+      No regressions detected. backend_test.py updated for iter3 checks.
+    -agent: "testing"
+    -message: |
       Iter2 regression PASS (9/9) on https://frigo-recipes-3.preview.emergentagent.com.
         - GET /api/ → recipes=48 (confirmed reseed from 38→48; backend log shows "Reseeded 48 recipes (version 2)").
         - POST /api/auth/register {code:"0000", email:"iter2.test@frigo.app", username:"iter2"} → 200 (id=c2d42758-...). Fallback to /auth/login implemented but not needed this run.

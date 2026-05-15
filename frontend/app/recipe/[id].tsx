@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { api, COLORS, getStoredUser, MAGNETS, Recipe, setStoredUser } from "@/src/lib/api";
+import { api, COLORS, getStoredUser, MAGNETS, Recipe, recipeImageUrl, setStoredUser } from "@/src/lib/api";
 import { useCooked } from "@/src/lib/cooked";
 import { useSettings } from "@/src/lib/settings";
 import { allergenLabels, substituteIngredient } from "@/src/lib/substitutions";
@@ -145,7 +145,15 @@ export default function RecipeDetail() {
           ) : null}
         </View>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+        {recipeImageUrl(r.image_url) && (
+          <Image
+            source={{ uri: recipeImageUrl(r.image_url)! }}
+            style={styles.hero}
+            resizeMode="cover"
+          />
+        )}
+        <View style={{ padding: 20, gap: 16 }}>
         <View>
           <Text style={styles.h1}>{r.nombre}</Text>
           <Text style={styles.meta}>{r.ccaa} · {r.tiempo} · {r.dificultad} · {r.raciones} raciones</Text>
@@ -207,6 +215,7 @@ export default function RecipeDetail() {
             <Text style={styles.stepText}>{p}</Text>
           </View>
         ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -214,6 +223,7 @@ export default function RecipeDetail() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.white },
+  hero: { width: "100%", height: 260, backgroundColor: COLORS.gray },
   loading: { padding: 40, textAlign: "center", color: COLORS.textSoft },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.gray },
   headerTitle: { flex: 1, textAlign: "center", fontSize: 16, fontWeight: "700", color: COLORS.text },

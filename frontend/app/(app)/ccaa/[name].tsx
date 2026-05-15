@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { api, COLORS, MAGNETS, Recipe } from "@/src/lib/api";
+import { api, COLORS, MAGNETS, Recipe, recipeImageUrl } from "@/src/lib/api";
 import { useCooked } from "@/src/lib/cooked";
 
 export default function CCAARecipes() {
@@ -60,6 +60,11 @@ export default function CCAARecipes() {
           const done = cookedIds.has(r.id);
           return (
             <TouchableOpacity key={r.id} testID={`recipe-${r.id}`} style={styles.card} onPress={() => router.push(`/recipe/${r.id}`)}>
+              {recipeImageUrl(r.image_url) ? (
+                <Image source={{ uri: recipeImageUrl(r.image_url)! }} style={styles.thumb} resizeMode="cover" />
+              ) : (
+                <View style={styles.thumb} />
+              )}
               <View style={{ flex: 1 }}>
                 <View style={styles.cardTitleRow}>
                   <Text style={styles.cardTitle} numberOfLines={1}>{r.nombre}</Text>
@@ -100,7 +105,8 @@ const styles = StyleSheet.create({
   progressMeta: { fontSize: 12, color: COLORS.textSoft, marginTop: 2 },
   bar: { height: 6, backgroundColor: COLORS.gray, borderRadius: 3, marginTop: 8, overflow: "hidden" },
   barFill: { height: "100%", backgroundColor: COLORS.text },
-  card: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: COLORS.grayLight, padding: 16, borderRadius: 10 },
+  card: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: COLORS.grayLight, padding: 12, borderRadius: 10 },
+  thumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: COLORS.gray },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   cardTitle: { flex: 1, fontSize: 16, fontWeight: "700", color: COLORS.text },
   miniMagnet: { width: 26, height: 26 },

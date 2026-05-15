@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, Swi
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { api, COLORS, MAGNETS, Recipe } from "@/src/lib/api";
+import { api, COLORS, MAGNETS, Recipe, recipeImageUrl } from "@/src/lib/api";
 import { useCooked } from "@/src/lib/cooked";
 import { useSettings, sortRecipes, SortBy } from "@/src/lib/settings";
 import { allergenLabels } from "@/src/lib/substitutions";
@@ -104,10 +104,15 @@ export default function ParaTi() {
                 return (
                   <TouchableOpacity key={r.id} testID={`recipe-${r.id}`} style={styles.card} onPress={() => router.push(`/recipe/${r.id}`)}>
                     <View style={styles.cardThumb}>
-                      {done && MAGNETS[r.ccaa] ? (
+                      {recipeImageUrl(r.image_url) ? (
+                        <Image source={{ uri: recipeImageUrl(r.image_url)! }} style={styles.cardThumbImg} resizeMode="cover" />
+                      ) : done && MAGNETS[r.ccaa] ? (
                         <Image source={{ uri: MAGNETS[r.ccaa] }} style={styles.cardThumbMagnet} resizeMode="contain" />
                       ) : (
                         <Text style={styles.cardThumbText}>{r.ccaa.slice(0, 3).toUpperCase()}</Text>
+                      )}
+                      {done && MAGNETS[r.ccaa] && (
+                        <Image source={{ uri: MAGNETS[r.ccaa] }} style={styles.cardThumbOverlay} resizeMode="contain" />
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
@@ -251,7 +256,9 @@ const styles = StyleSheet.create({
   h2: { fontSize: 14, fontWeight: "800", color: COLORS.text, marginTop: 12, marginBottom: 4 },
   sub: { fontSize: 13, color: COLORS.textSoft, marginTop: 4 },
   card: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.grayLight, padding: 14, borderRadius: 10, gap: 14 },
-  cardThumb: { width: 56, height: 56, backgroundColor: COLORS.gray, borderRadius: 8, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  cardThumb: { width: 64, height: 64, backgroundColor: COLORS.gray, borderRadius: 8, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  cardThumbImg: { width: 64, height: 64 },
+  cardThumbOverlay: { position: "absolute", bottom: -2, right: -2, width: 28, height: 28 },
   cardThumbText: { fontWeight: "800", color: COLORS.text, letterSpacing: 1 },
   cardThumbMagnet: { width: 50, height: 50 },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },

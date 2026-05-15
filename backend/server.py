@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -281,6 +282,8 @@ async def chat_history(session_id: str):
     return {"messages": msgs}
 
 app.include_router(api_router)
+# Serve recipe images (and any other static asset) via /api/static/* so it goes through ingress to port 8001.
+app.mount("/api/static", StaticFiles(directory=str(ROOT_DIR / "static")), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
