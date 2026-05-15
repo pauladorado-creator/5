@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { api, COLORS, getStoredUser, MAGNETS, Recipe, recipeImageUrl, setStoredUser } from "@/src/lib/api";
 import { useCooked } from "@/src/lib/cooked";
+import { useSaved } from "@/src/lib/saved";
 import { useSettings } from "@/src/lib/settings";
 import { allergenLabels, substituteIngredient } from "@/src/lib/substitutions";
 
@@ -175,7 +176,7 @@ export default function RecipeDetail() {
           <Image
             source={{ uri: recipeImageUrl(r.image_url)! }}
             style={styles.hero}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         )}
         <View style={{ padding: 20, gap: 16 }}>
@@ -248,7 +249,7 @@ export default function RecipeDetail() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.white },
-  hero: { width: "100%", height: 260, backgroundColor: COLORS.gray },
+  hero: { width: "100%", height: 260, backgroundColor: COLORS.white },
   loading: { padding: 40, textAlign: "center", color: COLORS.textSoft },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.gray },
   headerTitle: { flex: 1, textAlign: "center", fontSize: 15, fontWeight: "700", color: COLORS.text },

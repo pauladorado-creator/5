@@ -163,7 +163,7 @@ export default function ParaTi() {
                   <TouchableOpacity key={r.id} testID={`recipe-${r.id}`} style={styles.card} onPress={() => router.push(`/recipe/${r.id}`)}>
                     <View style={styles.cardThumb}>
                       {recipeImageUrl(r.image_url) ? (
-                        <Image source={{ uri: recipeImageUrl(r.image_url)! }} style={styles.cardThumbImg} resizeMode="cover" />
+                        <Image source={{ uri: recipeImageUrl(r.image_url)! }} style={styles.cardThumbImg} resizeMode="contain" />
                       ) : done && MAGNETS[r.ccaa] ? (
                         <Image source={{ uri: MAGNETS[r.ccaa] }} style={styles.cardThumbMagnet} resizeMode="contain" />
                       ) : (
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
   h2: { fontSize: 14, fontWeight: "800", color: COLORS.text, marginTop: 12, marginBottom: 4 },
   sub: { fontSize: 13, color: COLORS.textSoft, marginTop: 4 },
   card: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.grayLight, padding: 14, borderRadius: 10, gap: 14 },
-  cardThumb: { width: 64, height: 64, backgroundColor: COLORS.gray, borderRadius: 8, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  cardThumb: { width: 64, height: 64, backgroundColor: COLORS.white, borderRadius: 8, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   cardThumbImg: { width: 64, height: 64 },
   cardThumbOverlay: { position: "absolute", bottom: -2, right: -2, width: 28, height: 28 },
   cardThumbText: { fontWeight: "800", color: COLORS.text, letterSpacing: 1 },
