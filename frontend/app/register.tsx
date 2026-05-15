@@ -50,7 +50,8 @@ export default function Register() {
                 value={code} onChangeText={setCode}
                 placeholder="0000" placeholderTextColor={COLORS.textSoft}
                 keyboardType="number-pad" maxLength={4}
-                style={styles.input} secureTextEntry
+                autoFocus
+                style={styles.input}
               />
               <TouchableOpacity testID="register-validate-code" style={styles.btn} onPress={validateCode}>
                 <Text style={styles.btnText}>Continuar</Text>
@@ -64,6 +65,8 @@ export default function Register() {
                 value={email} onChangeText={setEmail}
                 placeholder="tucorreo@ejemplo.com" placeholderTextColor={COLORS.textSoft}
                 keyboardType="email-address" autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus
                 style={styles.input}
               />
               <Text style={styles.label}>Nombre de usuario</Text>
