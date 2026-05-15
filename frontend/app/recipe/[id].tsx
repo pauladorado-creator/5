@@ -16,7 +16,26 @@ export default function RecipeDetail() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const { cookedIds, reload: reloadCooked, addCooked } = useCooked();
+  const { savedIds, toggle: toggleSaved } = useSaved();
   const { filters } = useSettings();
+  const isSaved = id ? savedIds.has(String(id)) : false;
+
+  const onToggleSave = async () => {
+    if (!r) return;
+    const u = await getStoredUser();
+    if (!u) return Alert.alert("FRIGO", "Inicia sesión para guardar recetas");
+    const nowSaved = await toggleSaved(String(id));
+    Alert.alert("FRIGO", nowSaved ? "Receta guardada" : "Quitada de guardadas");
+  };
+
+  const onShare = async () => {
+    if (!r) return;
+    const ingr = r.ingredientes.slice(0, 6).map(x => `• ${x}`).join("\n");
+    const message = `${r.nombre} — receta tradicional de ${r.ccaa}\n\nIngredientes:\n${ingr}${r.ingredientes.length > 6 ? "\n…" : ""}\n\nDescúbrela completa en FRIGO 📲`;
+    try {
+      await Share.share({ message, title: r.nombre });
+    } catch {}
+  };
 
   // Allergen relevant for current user setup.
   const userAllergens = useMemo(() => {
@@ -137,7 +156,13 @@ export default function RecipeDetail() {
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{r.nombre}</Text>
-        <View style={{ width: 40, alignItems: "center" }}>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={onShare} style={styles.hAction} testID="share-recipe-btn" hitSlop={8}>
+            <Ionicons name="share-social-outline" size={22} color={COLORS.text} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onToggleSave} style={styles.hAction} testID="save-recipe-btn" hitSlop={8}>
+            <Ionicons name={isSaved ? "bookmark" : "bookmark-outline"} size={22} color={COLORS.text} />
+          </TouchableOpacity>
           {isCooked && MAGNETS[r.ccaa] ? (
             <Image source={{ uri: MAGNETS[r.ccaa] }} style={styles.headerBadge} resizeMode="contain" />
           ) : isCooked ? (
@@ -226,7 +251,9 @@ const styles = StyleSheet.create({
   hero: { width: "100%", height: 260, backgroundColor: COLORS.gray },
   loading: { padding: 40, textAlign: "center", color: COLORS.textSoft },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.gray },
-  headerTitle: { flex: 1, textAlign: "center", fontSize: 16, fontWeight: "700", color: COLORS.text },
+  headerTitle: { flex: 1, textAlign: "center", fontSize: 15, fontWeight: "700", color: COLORS.text },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 4 },
+  hAction: { padding: 6 },
   headerBadge: { width: 28, height: 28 },
   h1: { fontSize: 26, fontWeight: "800", color: COLORS.text, letterSpacing: -0.5 },
   meta: { fontSize: 13, color: COLORS.textSoft, marginTop: 6 },

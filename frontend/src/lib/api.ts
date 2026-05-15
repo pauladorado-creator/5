@@ -84,6 +84,11 @@ export const api = {
   getCooked: (user_id: string) => req(`/user/${user_id}/cooked`),
   getCookedPhoto: (user_id: string, recipe_id: string) =>
     req(`/user/${user_id}/cooked/${recipe_id}`),
+  saveRecipe: (user_id: string, recipe_id: string) =>
+    req(`/recipes/${recipe_id}/save`, { method: "POST", body: JSON.stringify({ user_id, recipe_id }) }),
+  unsaveRecipe: (user_id: string, recipe_id: string) =>
+    req(`/recipes/${recipe_id}/save?user_id=${encodeURIComponent(user_id)}`, { method: "DELETE" }),
+  getSaved: (user_id: string) => req(`/user/${user_id}/saved`),
   getCart: (user_id: string) => req(`/cart/${user_id}`),
   updateCart: (user_id: string, items: { name: string; quantity: number }[]) =>
     req("/cart", { method: "POST", body: JSON.stringify({ user_id, items }) }),

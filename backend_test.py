@@ -1,17 +1,21 @@
-"""FRIGO backend regression — iteration 3.
+"""FRIGO backend regression — iteration 4.
 
-Quick checks:
-1. GET /api/ returns recipes count 50.
-2. GET /api/recipes?ccaa=Comunidad+Valenciana returns 3 recipes with expected names and image_url.
-3. GET (and HEAD) /api/static/recipes/recipe_01.jpg returns 200 image/jpeg.
-4. GET /api/static/recipes/recipe_50.jpg returns 200.
-5. GET /api/ccaa returns 17 entries, includes Comunidad Valenciana, excludes Ceuta/Melilla.
-6. GET /api/recipes/{first_id} includes image_url.
-7. Regression: POST /api/auth/login still works for a prior user; POST /api/cart works with kind=personal.
+Validates new SAVE endpoints + regression on /api/, /api/ccaa, /api/static/* and recipes.
+
+Endpoints validated:
+- POST /api/auth/register (or fallback /auth/login if 400)
+- GET  /api/recipes?ccaa=Galicia → pick first recipe
+- POST /api/recipes/{RID}/save → 200 {ok:true, saved:true}; idempotent
+- GET  /api/user/{uid}/saved → recipe_ids contains RID, recipes hydrated with image_url + precio
+- DELETE /api/recipes/{RID}/save?user_id={uid} → 200 {saved:false, deleted:1}
+- GET  /api/user/{uid}/saved → RID gone
+- POST /api/recipes/{RID}/save again → succeeds (re-save)
+- GET  /api/static/recipes/recipe_01.jpg → 200 image/jpeg
+- GET  /api/ → recipes=50
+- GET  /api/ccaa → 17 entries, no Ceuta/Melilla
 """
 
 import sys
-import uuid
 import requests
 
 BASE = "https://frigo-recipes-3.preview.emergentagent.com"
@@ -26,173 +30,184 @@ def record(name: str, ok: bool, detail: str = "") -> None:
     print(f"[{status}] {name} :: {detail}")
 
 
-def test_root_recipe_count():
-    r = requests.get(f"{API}/", timeout=20)
-    ok = r.status_code == 200 and r.json().get("recipes") == 50
-    record("GET /api/ returns 50 recipes", ok, f"status={r.status_code} body={r.text[:200]}")
-
-
-def test_comunidad_valenciana():
-    r = requests.get(f"{API}/recipes", params={"ccaa": "Comunidad Valenciana"}, timeout=20)
-    if r.status_code != 200:
-        record("GET /api/recipes?ccaa=Comunidad Valenciana", False, f"status={r.status_code}")
-        return
-    data = r.json()
-    names = [item["nombre"] for item in data]
-    expected = {"Arroz Meloso de Pollo", "Fideuà", "Arroz a Banda"}
-    ok_count = len(data) == 3
-    ok_names = set(names) == expected
-    bad_image = [
-        n for n, item in zip(names, data)
-        if not isinstance(item.get("image_url"), str)
-        or not item["image_url"].startswith("/api/static/recipes/recipe_")
-    ]
-    ok_images = not bad_image
-    record(
-        "GET /api/recipes?ccaa=Comunidad Valenciana → 3 with image_url",
-        ok_count and ok_names and ok_images,
-        f"count={len(data)} names={names} bad_image_for={bad_image}",
+def register_or_login(email: str, username: str) -> str:
+    """Returns user_id."""
+    r = requests.post(
+        f"{API}/auth/register",
+        json={"code": "0000", "email": email, "username": username},
+        timeout=20,
     )
-
-
-def test_static_images():
-    r = requests.get(f"{API}/static/recipes/recipe_01.jpg", timeout=20)
-    ct = r.headers.get("content-type", "")
-    ok1 = r.status_code == 200 and "image/jpeg" in ct
-    record("GET /api/static/recipes/recipe_01.jpg", ok1, f"status={r.status_code} content-type={ct} bytes={len(r.content)}")
-
-    h = requests.head(f"{API}/static/recipes/recipe_01.jpg", timeout=20)
-    cth = h.headers.get("content-type", "")
-    ok_head = h.status_code == 200 and "image/jpeg" in cth
-    record("HEAD /api/static/recipes/recipe_01.jpg", ok_head, f"status={h.status_code} content-type={cth}")
-
-    r2 = requests.get(f"{API}/static/recipes/recipe_50.jpg", timeout=20)
-    ct2 = r2.headers.get("content-type", "")
-    ok2 = r2.status_code == 200 and "image/jpeg" in ct2
-    record("GET /api/static/recipes/recipe_50.jpg", ok2, f"status={r2.status_code} content-type={ct2} bytes={len(r2.content)}")
-
-
-def test_ccaa_list():
-    r = requests.get(f"{API}/ccaa", timeout=20)
-    if r.status_code != 200:
-        record("GET /api/ccaa", False, f"status={r.status_code}")
-        return
-    data = r.json().get("ccaa", [])
-    has_cv = "Comunidad Valenciana" in data
-    no_ceuta = "Ceuta" not in data
-    no_melilla = "Melilla" not in data
-    ok_count = len(data) == 17
-    record(
-        "GET /api/ccaa structure",
-        has_cv and no_ceuta and no_melilla and ok_count,
-        f"count={len(data)} has_CV={has_cv} no_Ceuta={no_ceuta} no_Melilla={no_melilla} list={data}",
-    )
-
-
-def test_recipe_detail_image():
-    r = requests.get(f"{API}/recipes", timeout=20)
-    if r.status_code != 200 or not r.json():
-        record("GET /api/recipes/{first_id} image_url", False, "no recipes")
-        return
-    first = r.json()[0]
-    rid = first["id"]
-    r2 = requests.get(f"{API}/recipes/{rid}", timeout=20)
-    if r2.status_code != 200:
-        record("GET /api/recipes/{first_id} image_url", False, f"status={r2.status_code}")
-        return
-    body = r2.json()
-    img = body.get("image_url")
-    ok = isinstance(img, str) and img.startswith("/api/static/recipes/recipe_")
-    record(
-        "GET /api/recipes/{first_id} includes image_url",
-        ok,
-        f"id={rid} image_url={img}",
-    )
-
-
-def test_auth_login_existing():
-    candidates = ["backend.test@frigo.app", "iter2.test@frigo.app", "demo@frigo.app"]
-    login_ok = False
-    user_id = None
-    used_email = None
-    for email in candidates:
-        r = requests.post(f"{API}/auth/login", json={"email": email}, timeout=20)
-        if r.status_code == 200:
-            login_ok = True
-            user_id = r.json().get("id")
-            used_email = email
-            break
-    if not login_ok:
-        new_email = f"iter3.{uuid.uuid4().hex[:8]}@frigo.app"
-        reg = requests.post(
-            f"{API}/auth/register",
-            json={"code": "0000", "email": new_email, "username": "iter3"},
-            timeout=20,
+    if r.status_code == 200:
+        data = r.json()
+        record("POST /api/auth/register", True, f"status=200 id={data.get('id')}")
+        return data["id"]
+    if r.status_code == 400:
+        # Likely already registered → login
+        r2 = requests.post(f"{API}/auth/login", json={"email": email}, timeout=20)
+        if r2.status_code == 200:
+            data = r2.json()
+            record(
+                "POST /api/auth/register (fallback login)",
+                True,
+                f"register=400, login=200 id={data.get('id')}",
+            )
+            return data["id"]
+        record(
+            "POST /api/auth/register (fallback login)",
+            False,
+            f"register=400 body={r.text[:200]} login_status={r2.status_code} login_body={r2.text[:200]}",
         )
-        if reg.status_code == 200:
-            login_again = requests.post(f"{API}/auth/login", json={"email": new_email}, timeout=20)
-            if login_again.status_code == 200:
-                login_ok = True
-                user_id = login_again.json().get("id")
-                used_email = new_email
-    record(
-        "POST /api/auth/login (prior or fresh user)",
-        login_ok and bool(user_id),
-        f"email={used_email} user_id={user_id}",
-    )
-    return user_id
-
-
-def test_cart_personal(user_id):
-    if not user_id:
-        record("POST /api/cart with kind=personal", False, "missing user_id")
-        return
-    payload = {
-        "user_id": user_id,
-        "items": [
-            {"name": "Leche entera", "quantity": 2, "kind": "personal", "recipe_name": None},
-            {"name": "Pan candeal", "quantity": 1, "kind": "personal", "recipe_name": None},
-        ],
-    }
-    r = requests.post(f"{API}/cart", json=payload, timeout=20)
-    if r.status_code != 200:
-        record("POST /api/cart with kind=personal", False, f"status={r.status_code} body={r.text[:200]}")
-        return
-    g = requests.get(f"{API}/cart/{user_id}", timeout=20)
-    if g.status_code != 200:
-        record("POST /api/cart with kind=personal", False, f"GET status={g.status_code}")
-        return
-    items = g.json().get("items", [])
-    names = sorted(i["name"] for i in items)
-    all_personal = bool(items) and all(i.get("kind") == "personal" for i in items)
-    ok = names == sorted(["Leche entera", "Pan candeal"]) and all_personal
-    record(
-        "POST /api/cart with kind=personal (round-trip)",
-        ok,
-        f"items={items}",
-    )
+        sys.exit(1)
+    record("POST /api/auth/register", False, f"status={r.status_code} body={r.text[:200]}")
+    sys.exit(1)
 
 
 def main():
-    print(f"Testing against {API}")
-    test_root_recipe_count()
-    test_comunidad_valenciana()
-    test_static_images()
-    test_ccaa_list()
-    test_recipe_detail_image()
-    uid = test_auth_login_existing()
-    test_cart_personal(uid)
+    # Step 1: register/login
+    user_id = register_or_login("iter4.test@frigo.app", "iter4")
 
-    passed = sum(1 for _, ok, _ in results if ok)
-    total = len(results)
-    print("\n----- SUMMARY -----")
-    print(f"{passed}/{total} checks passed")
-    failed = [name for name, ok, _ in results if not ok]
+    # Step 2: GET /api/recipes?ccaa=Galicia → pick first
+    r = requests.get(f"{API}/recipes", params={"ccaa": "Galicia"}, timeout=20)
+    if r.status_code != 200 or not isinstance(r.json(), list) or not r.json():
+        record("GET /api/recipes?ccaa=Galicia", False, f"status={r.status_code} body={r.text[:200]}")
+        return
+    galicia = r.json()
+    rid = galicia[0]["id"]
+    rname = galicia[0].get("nombre", "?")
+    record(
+        "GET /api/recipes?ccaa=Galicia",
+        True,
+        f"count={len(galicia)} first_id={rid} name={rname}",
+    )
+
+    # Step 3a: POST save
+    r = requests.post(
+        f"{API}/recipes/{rid}/save",
+        json={"user_id": user_id, "recipe_id": rid},
+        timeout=20,
+    )
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    ok = r.status_code == 200 and body.get("ok") is True and body.get("saved") is True
+    record(
+        "POST /api/recipes/{RID}/save",
+        ok,
+        f"status={r.status_code} body={body}",
+    )
+
+    # Step 3b: Idempotent — POST save again
+    r = requests.post(
+        f"{API}/recipes/{rid}/save",
+        json={"user_id": user_id, "recipe_id": rid},
+        timeout=20,
+    )
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    ok = r.status_code == 200 and body.get("ok") is True and body.get("saved") is True
+    record(
+        "POST /api/recipes/{RID}/save (idempotent repeat)",
+        ok,
+        f"status={r.status_code} body={body}",
+    )
+
+    # Step 4: GET saved → contains RID with hydrated recipe (image_url + precio)
+    r = requests.get(f"{API}/user/{user_id}/saved", timeout=20)
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    saved_ids = body.get("recipe_ids", []) if isinstance(body, dict) else []
+    saved_recipes = body.get("recipes", []) if isinstance(body, dict) else []
+    contains = rid in saved_ids
+    matched = next((rec for rec in saved_recipes if rec.get("id") == rid), None)
+    has_image = isinstance(matched, dict) and isinstance(matched.get("image_url"), str) and matched["image_url"].startswith("/api/static/recipes/")
+    has_precio = isinstance(matched, dict) and isinstance(matched.get("precio"), (int, float))
+    ok = r.status_code == 200 and contains and has_image and has_precio
+    record(
+        "GET /api/user/{uid}/saved (after save) → contains RID + hydrated",
+        ok,
+        f"status={r.status_code} ids_count={len(saved_ids)} contains={contains} image_url={matched and matched.get('image_url')} precio={matched and matched.get('precio')}",
+    )
+
+    # Step 5: DELETE save
+    r = requests.delete(
+        f"{API}/recipes/{rid}/save",
+        params={"user_id": user_id},
+        timeout=20,
+    )
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    ok = r.status_code == 200 and body.get("saved") is False and body.get("deleted") == 1
+    record(
+        "DELETE /api/recipes/{RID}/save",
+        ok,
+        f"status={r.status_code} body={body}",
+    )
+
+    # Step 6: GET saved → RID gone
+    r = requests.get(f"{API}/user/{user_id}/saved", timeout=20)
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    saved_ids = body.get("recipe_ids", []) if isinstance(body, dict) else []
+    ok = r.status_code == 200 and rid not in saved_ids
+    record(
+        "GET /api/user/{uid}/saved (after delete) → RID gone",
+        ok,
+        f"status={r.status_code} ids_count={len(saved_ids)} rid_in_list={rid in saved_ids}",
+    )
+
+    # Step 7: POST save again (re-save)
+    r = requests.post(
+        f"{API}/recipes/{rid}/save",
+        json={"user_id": user_id, "recipe_id": rid},
+        timeout=20,
+    )
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    ok = r.status_code == 200 and body.get("saved") is True
+    record(
+        "POST /api/recipes/{RID}/save (re-save after delete)",
+        ok,
+        f"status={r.status_code} body={body}",
+    )
+
+    # Step 8: GET static image
+    r = requests.get(f"{API}/static/recipes/recipe_01.jpg", timeout=20)
+    ct = r.headers.get("content-type", "")
+    ok = r.status_code == 200 and ct.startswith("image/")
+    record(
+        "GET /api/static/recipes/recipe_01.jpg",
+        ok,
+        f"status={r.status_code} content-type={ct} bytes={len(r.content)}",
+    )
+
+    # Step 9a: GET / → recipes=50
+    r = requests.get(f"{API}/", timeout=20)
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    ok = r.status_code == 200 and body.get("recipes") == 50
+    record(
+        "GET /api/ → recipes=50",
+        ok,
+        f"status={r.status_code} body={body}",
+    )
+
+    # Step 9b: GET /ccaa → 17, no Ceuta/Melilla
+    r = requests.get(f"{API}/ccaa", timeout=20)
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    ccaa = body.get("ccaa", []) if isinstance(body, dict) else []
+    ok = (
+        r.status_code == 200
+        and len(ccaa) == 17
+        and "Ceuta" not in ccaa
+        and "Melilla" not in ccaa
+    )
+    record(
+        "GET /api/ccaa → 17 entries, no Ceuta/Melilla",
+        ok,
+        f"status={r.status_code} count={len(ccaa)} ccaa={ccaa}",
+    )
+
+    # Summary
+    failed = [n for n, ok, _ in results if not ok]
+    print("\n=== SUMMARY ===")
+    print(f"Total: {len(results)}  Passed: {len(results) - len(failed)}  Failed: {len(failed)}")
     if failed:
-        print("Failures:")
-        for f in failed:
-            print(f" - {f}")
-    sys.exit(0 if passed == total else 1)
+        print("FAILED:")
+        for n in failed:
+            print(f"  - {n}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

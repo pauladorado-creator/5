@@ -66,6 +66,10 @@ class CookRequest(BaseModel):
     user_id: str
     photo_base64: str
 
+class SaveRequest(BaseModel):
+    user_id: str
+    recipe_id: str
+
 # ---------- Startup ----------
 @app.on_event("startup")
 async def seed_recipes():
@@ -232,6 +236,45 @@ async def get_user_cooked_photo(user_id: str, recipe_id: str):
     if not item:
         raise HTTPException(status_code=404, detail="Sin foto")
     return item
+
+@api_router.post("/recipes/{recipe_id}/save")
+async def save_recipe(recipe_id: str, req: SaveRequest):
+    if req.recipe_id != recipe_id:
+        raise HTTPException(status_code=400, detail="recipe_id no coincide")
+    recipe = await db.recipes.find_one({"id": recipe_id})
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Receta no encontrada")
+    user = await db.users.find_one({"id": req.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    await db.saved_recipes.update_one(
+        {"user_id": req.user_id, "recipe_id": recipe_id},
+        {"$set": {
+            "user_id": req.user_id,
+            "recipe_id": recipe_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "saved": True, "recipe_id": recipe_id}
+
+@api_router.delete("/recipes/{recipe_id}/save")
+async def unsave_recipe(recipe_id: str, user_id: str):
+    res = await db.saved_recipes.delete_one({"user_id": user_id, "recipe_id": recipe_id})
+    return {"ok": True, "saved": False, "deleted": res.deleted_count}
+
+@api_router.get("/user/{user_id}/saved")
+async def get_user_saved(user_id: str):
+    items = await db.saved_recipes.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    recipe_ids = [i["recipe_id"] for i in items]
+    # Hydrate recipes
+    if recipe_ids:
+        recipes = await db.recipes.find({"id": {"$in": recipe_ids}}, {"_id": 0}).to_list(500)
+        by_id = {r["id"]: r for r in recipes}
+        ordered = [by_id[rid] for rid in recipe_ids if rid in by_id]
+    else:
+        ordered = []
+    return {"recipe_ids": recipe_ids, "recipes": ordered}
 
 @api_router.get("/cart/{user_id}")
 async def get_cart(user_id: str):

@@ -169,6 +169,21 @@ backend:
         -agent: "testing"
         -comment: "Regression PASS: POST /auth/register (new user) → 200 with id; POST /auth/login returns the same id; GET /api/ shows 38 recipes seeded; GET /api/ccaa returns 19 entries; GET /api/recipes?ccaa=Murcia returns 3 recipes; GET /api/recipes/{id} → 200; GET /api/user/{id} reflects magnets=['Murcia']; POST /api/chat/message with Emergent LLM key returned a 319-char Spanish answer recommending Zarangollo for summer; POST /api/cart + GET /api/cart/{user_id} round-trip works."
 
+  - task: "Save / Unsave recipe endpoints (iter4)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New endpoints: POST /api/recipes/{rid}/save (upsert), DELETE /api/recipes/{rid}/save?user_id=…, GET /api/user/{uid}/saved (hydrated recipes ordered desc by created_at)."
+        -working: true
+        -agent: "testing"
+        -comment: "Iter4 PASS (11/11) on live preview URL. POST /api/auth/register {code:0000,email:iter4.test@frigo.app,username:iter4} → 200 id=48a72db4-…. Galicia first recipe = 'Empanada Gallega' (id df585fa4-…). POST /api/recipes/{rid}/save → 200 {ok:true,saved:true,recipe_id:…}; repeating the call is idempotent (still 200, same body). GET /api/user/{uid}/saved → recipe_ids=[rid] and recipes[0] hydrated with image_url='/api/static/recipes/recipe_34.jpg' and precio=5.0. DELETE /api/recipes/{rid}/save?user_id={uid} → 200 {ok:true,saved:false,deleted:1}. Subsequent GET /api/user/{uid}/saved → recipe_ids=[] (rid removed). Re-POST save after delete → 200 {saved:true}. GET /api/static/recipes/recipe_01.jpg → 200 image/jpeg, 88556 bytes (re-processed images served fine). GET /api/ → recipes=50. GET /api/ccaa → 17 entries, Ceuta/Melilla absent. No regressions."
+
 frontend:
   - task: "Splash screen full-bleed fridge + small logo + no default magnets"
     implemented: true
@@ -238,15 +253,26 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Cook recipe endpoint (POST /api/recipes/{id}/cook) with photo + magnet auto-award"
-    - "Get cooked recipes for user (GET /api/user/{id}/cooked)"
-    - "Get a single cooked recipe photo (GET /api/user/{id}/cooked/{recipe_id})"
-    - "Existing auth/recipe/CCAA endpoints (regression)"
+    - "Save / Unsave recipe endpoints (iter4)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    -agent: "testing"
+    -message: |
+      Iter4 quick regression PASS (11/11) on https://frigo-recipes-3.preview.emergentagent.com.
+        - POST /api/auth/register {code:0000, email:iter4.test@frigo.app, username:iter4} → 200, id=48a72db4-ce3a-47cd-a2ef-2c9544030e2b. (Fallback /auth/login on 400 implemented but not triggered.)
+        - GET /api/recipes?ccaa=Galicia → 3 recipes; first = "Empanada Gallega" (id df585fa4-d621-489b-83b6-38dc5c5356d4).
+        - POST /api/recipes/{rid}/save with {user_id, recipe_id} → 200 {ok:true, saved:true, recipe_id:rid}. Repeating the same call (idempotency) → still 200 with same body, no duplicates.
+        - GET /api/user/{uid}/saved → recipe_ids=[rid]; recipes[0] is hydrated with image_url="/api/static/recipes/recipe_34.jpg" and precio=5.0 (both fields present and typed correctly).
+        - DELETE /api/recipes/{rid}/save?user_id={uid} → 200 {ok:true, saved:false, deleted:1}.
+        - GET /api/user/{uid}/saved (after delete) → recipe_ids=[] (rid removed, recipes also empty).
+        - POST /api/recipes/{rid}/save again (re-save after delete) → 200 {saved:true}.
+        - GET /api/static/recipes/recipe_01.jpg → 200, content-type image/jpeg, 88556 bytes (re-processed white-background images served correctly).
+        - GET /api/ → recipes=50.
+        - GET /api/ccaa → 17 entries (Andalucía…País Vasco); Ceuta/Melilla absent.
+      No regressions detected. backend_test.py updated for iter4 SAVE checks.
     -agent: "testing"
     -message: |
       Iter3 quick regression PASS (9/9) on https://frigo-recipes-3.preview.emergentagent.com.

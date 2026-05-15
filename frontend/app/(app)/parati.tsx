@@ -83,7 +83,7 @@ export default function ParaTi() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <FrigoHeader tab={tab} onTabChange={setTab} />
+      <FrigoHeader tab={tab} onTabChange={setTab} onFavorite={() => router.push("/saved")} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
         {notifs.map((m, i) => (
           <View key={i} style={styles.notif} testID={`notif-${i}`}>
