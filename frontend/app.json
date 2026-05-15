@@ -33,8 +33,30 @@
           "resizeMode": "contain",
           "backgroundColor": "#000"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Sube fotos de tus platos para coleccionar imanes",
+          "cameraPermission": "Haz fotos de tus platos para coleccionar imanes"
+        }
       ]
     ],
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Sube fotos de tus platos para coleccionar imanes",
+        "NSCameraUsageDescription": "Haz fotos de tus platos para coleccionar imanes"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#000"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.CAMERA", "android.permission.READ_MEDIA_IMAGES"]
+    },
     "experiments": {
       "typedRoutes": true
     }

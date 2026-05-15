@@ -59,6 +59,10 @@ class MagnetGain(BaseModel):
     ccaa: str
     photo_base64: Optional[str] = None
 
+class CookRequest(BaseModel):
+    user_id: str
+    photo_base64: str
+
 # ---------- Startup ----------
 @app.on_event("startup")
 async def seed_recipes():
@@ -159,6 +163,61 @@ async def earn_magnet(req: MagnetGain):
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
     return {"magnets": magnets}
+
+@api_router.post("/recipes/{recipe_id}/cook")
+async def cook_recipe(recipe_id: str, req: CookRequest):
+    recipe = await db.recipes.find_one({"id": recipe_id})
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Receta no encontrada")
+    user = await db.users.find_one({"id": req.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    ccaa = recipe["ccaa"]
+    now = datetime.now(timezone.utc).isoformat()
+    await db.cooked_recipes.update_one(
+        {"user_id": req.user_id, "recipe_id": recipe_id},
+        {"$set": {
+            "user_id": req.user_id,
+            "recipe_id": recipe_id,
+            "ccaa": ccaa,
+            "photo": req.photo_base64,
+            "created_at": now,
+        }},
+        upsert=True,
+    )
+    total_ccaa = await db.recipes.count_documents({"ccaa": ccaa})
+    cooked_count = await db.cooked_recipes.count_documents({"user_id": req.user_id, "ccaa": ccaa})
+    magnets = user.get("magnets", [])
+    awarded = False
+    if cooked_count >= total_ccaa and ccaa not in magnets:
+        magnets.append(ccaa)
+        await db.users.update_one({"id": req.user_id}, {"$set": {"magnets": magnets}})
+        awarded = True
+    return {
+        "ok": True,
+        "ccaa": ccaa,
+        "cooked_in_ccaa": cooked_count,
+        "total_in_ccaa": total_ccaa,
+        "awarded_magnet": awarded,
+        "magnets": magnets,
+    }
+
+@api_router.get("/user/{user_id}/cooked")
+async def get_user_cooked(user_id: str):
+    items = await db.cooked_recipes.find(
+        {"user_id": user_id}, {"_id": 0, "photo": 0}
+    ).to_list(1000)
+    recipe_ids = [i["recipe_id"] for i in items]
+    return {"recipe_ids": recipe_ids, "items": items}
+
+@api_router.get("/user/{user_id}/cooked/{recipe_id}")
+async def get_user_cooked_photo(user_id: str, recipe_id: str):
+    item = await db.cooked_recipes.find_one(
+        {"user_id": user_id, "recipe_id": recipe_id}, {"_id": 0}
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Sin foto")
+    return item
 
 @api_router.get("/cart/{user_id}")
 async def get_cart(user_id: str):

@@ -101,3 +101,174 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  FRIGO recipe app. New iteration: implement Splash screen full-bleed fridge image with small
+  FRIGO logo (no background), draggable collectible magnets per CCAA (only shown when earned),
+  recipe photo upload to mark recipes as "cooked", and auto-award CCAA magnet when all recipes
+  of that CCAA are cooked by the user. Map 15 magnet assets to their CCAA. Spanish locale.
+
+backend:
+  - task: "Cook recipe endpoint (POST /api/recipes/{id}/cook) with photo + magnet auto-award"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New endpoint: stores cooked recipe (user_id, recipe_id, ccaa, base64 photo), counts cooked vs total recipes for that CCAA, and adds CCAA to user.magnets when all recipes are cooked. Returns awarded_magnet flag."
+        -working: true
+        -agent: "testing"
+        -comment: "Verified end-to-end on live preview URL. Murcia has 3 recipes; cooking #1 and #2 returned awarded_magnet=false with cooked_in_ccaa=1 then 2; the 3rd cook returned awarded_magnet=true, ccaa='Murcia', magnets=['Murcia']. Repeating the same cook call is idempotent (cooked_in_ccaa stays at 3, total_in_ccaa=3, no duplicate magnet). 404 paths return Spanish error messages."
+
+  - task: "Get cooked recipes for user (GET /api/user/{id}/cooked)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Returns recipe_ids list and items (photo omitted) so frontend can mark recipes as done."
+        -working: true
+        -agent: "testing"
+        -comment: "Confirmed recipe_ids array contains all 3 Murcia recipe ids after cooking them. Items array is returned without the photo field (only photo omitted, other fields like ccaa/created_at present)."
+
+  - task: "Get a single cooked recipe photo (GET /api/user/{id}/cooked/{recipe_id})"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Returns full cooked doc including base64 photo for the recipe detail screen."
+        -working: true
+        -agent: "testing"
+        -comment: "Returns the cooked document including the base64 photo string (118 chars matching the data URI we sent). 200 OK."
+
+  - task: "Existing auth/recipe/CCAA endpoints (regression)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Register/login/recipes/ccaa/chat unchanged. Need regression validation."
+        -working: true
+        -agent: "testing"
+        -comment: "Regression PASS: POST /auth/register (new user) → 200 with id; POST /auth/login returns the same id; GET /api/ shows 38 recipes seeded; GET /api/ccaa returns 19 entries; GET /api/recipes?ccaa=Murcia returns 3 recipes; GET /api/recipes/{id} → 200; GET /api/user/{id} reflects magnets=['Murcia']; POST /api/chat/message with Emergent LLM key returned a 319-char Spanish answer recommending Zarangollo for summer; POST /api/cart + GET /api/cart/{user_id} round-trip works."
+
+frontend:
+  - task: "Splash screen full-bleed fridge + small logo + no default magnets"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Visually verified via screenshot: fridge fills the screen, FRIGO logo small at top with no background, login/register buttons at bottom, no default magnets."
+
+  - task: "Draggable collectible magnets on splash for earned CCAA"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/index.tsx, /app/frontend/src/components/DraggableMagnet.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "DraggableMagnet uses PanResponder, persists position per user/CCAA in AsyncStorage. Splash renders only user.magnets entries with their image."
+
+  - task: "Recipe photo upload + magnet award flow"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/recipe/[id].tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Uses expo-image-picker (camera or library), sends base64 to /api/recipes/{id}/cook, shows the photo with overlay magnet + 'Hecha por ti' label and alerts when CCAA magnet awarded."
+
+  - task: "Cooked recipes badge in lists (Para ti + CCAA)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(app)/parati.tsx, /app/frontend/app/(app)/ccaa/[name].tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "CookedProvider exposes cookedIds via context. Recipe cards show small magnet thumb and checkmark when cooked. CCAA page also shows progress (X/Y) and unlocks the big magnet visual."
+
+  - task: "Magnet asset mapping for 15 CCAA"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/lib/api.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Andalucía, Aragón, Asturias, Baleares, Canarias, Cantabria, Castilla-La Mancha, Castilla y León, Cataluña, Extremadura, Galicia, La Rioja, Madrid, Murcia, Navarra all mapped to user-provided assets."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Cook recipe endpoint (POST /api/recipes/{id}/cook) with photo + magnet auto-award"
+    - "Get cooked recipes for user (GET /api/user/{id}/cooked)"
+    - "Get a single cooked recipe photo (GET /api/user/{id}/cooked/{recipe_id})"
+    - "Existing auth/recipe/CCAA endpoints (regression)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "testing"
+    -message: |
+      Backend regression + new endpoints all PASS (16/16) on the live preview URL.
+      Highlights:
+        - Created user backend.test@frigo.app via /api/auth/register (code 0000) and re-logged in.
+        - Murcia has 3 recipes. Cooking the 1st and 2nd returned awarded_magnet=false (cooked_in_ccaa=1,2; total=3). Cooking the 3rd returned awarded_magnet=true, ccaa='Murcia', magnets=['Murcia']. Repeating the 3rd cook is idempotent (counts stay 3/3).
+        - GET /api/user/{id}/cooked returns all 3 Murcia recipe_ids.
+        - GET /api/user/{id}/cooked/{recipe_id} returns the base64 photo (118 chars).
+        - GET /api/user/{id} reflects 'Murcia' in magnets.
+        - Regression: GET /api/ recipes=38, GET /api/ccaa returns 19 entries, GET /api/recipes/{id} OK, POST /api/chat/message produced a coherent Spanish recommendation ('Zarangollo... perfecto para el verano'), Cart POST + GET round-trip OK.
+      No issues found. Frontend testing not attempted (per protocol, do not test FE without user request).
+    -agent: "main"
+    -message: |
+      Implemented photo upload + magnet collection flow. Please regression-test all existing endpoints
+      AND validate the new ones:
+        1. POST /api/auth/register with { code: "0000", email: "demo@frigo.app", username: "demo" } → 200
+        2. POST /api/auth/login with { email: "demo@frigo.app" } → returns the user
+        3. GET /api/recipes?ccaa=Murcia → should return >= 2 recipes
+        4. For each recipe in CCAA "Murcia": POST /api/recipes/{id}/cook with { user_id, photo_base64: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" }.
+           - Each call should respond with cooked_in_ccaa increasing, total_in_ccaa equal to the recipe count.
+           - The LAST call must set awarded_magnet=true and include "Murcia" in magnets array.
+        5. GET /api/user/{user_id}/cooked → recipe_ids should contain all Murcia recipe ids.
+        6. GET /api/user/{user_id}/cooked/{recipe_id} → photo field present.
+        7. POST /api/chat/message with a Spanish prompt about Spanish recipes → 200 response with text.
+      Use test_credentials.md for the registration code. Spanish locale; user-facing errors should be in Spanish.

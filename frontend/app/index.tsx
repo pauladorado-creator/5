@@ -1,80 +1,136 @@
-import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Dimensions, PanResponder } from "react-native";
-import { useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { COLORS, FRIDGE_URL, LOGO_URL, MAGNETS, getStoredUser } from "@/src/lib/api";
+import { api, COLORS, FRIDGE_URL, LOGO_URL, MAGNETS, User, getStoredUser, setStoredUser } from "@/src/lib/api";
+import { DraggableMagnet } from "@/src/components/DraggableMagnet";
 
-const { height } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
+
+// Initial position grid (rough top-right area of fridge). User can drag freely.
+function defaultPosition(idx: number) {
+  const cols = 3;
+  const startX = width * 0.08;
+  const startY = height * 0.18;
+  const stepX = width * 0.28;
+  const stepY = 110;
+  const col = idx % cols;
+  const row = Math.floor(idx / cols);
+  return { x: startX + col * stepX, y: startY + row * stepY };
+}
 
 export default function Splash() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [hasUser, setHasUser] = useState<boolean | null>(null);
-  const translateY = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => { getStoredUser().then(u => setHasUser(!!u)); }, []);
+  const refresh = useCallback(async () => {
+    const stored = await getStoredUser();
+    if (stored) {
+      // Pull latest magnets from backend so newly earned ones show up.
+      try {
+        const fresh = await api.getUser(stored.id);
+        await setStoredUser(fresh);
+        setUser(fresh);
+        setHasUser(true);
+      } catch {
+        setUser(stored);
+        setHasUser(true);
+      }
+    } else {
+      setUser(null);
+      setHasUser(false);
+    }
+  }, []);
 
-  const enterApp = () => {
-    Animated.parallel([
-      Animated.timing(translateY, { toValue: -height, duration: 500, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
-    ]).start(() => router.replace("/(app)/parati"));
-  };
+  useEffect(() => { refresh(); }, [refresh]);
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 10,
-      onPanResponderMove: (_, g) => { if (g.dy < 0) translateY.setValue(g.dy); },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy < -80 && hasUser) enterApp();
-        else Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
-      },
-    })
-  ).current;
+  const enterApp = () => router.replace("/(app)/parati");
 
   return (
-    <Animated.View style={[styles.root, { opacity, transform: [{ translateY }] }]} {...panResponder.panHandlers}>
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <View style={styles.magnetsRow}>
-          {Object.entries(MAGNETS).slice(0, 3).map(([k, url]) => (
-            <Image key={k} source={{ uri: url }} style={styles.magnetSmall} resizeMode="contain" />
-          ))}
+    <View style={styles.root}>
+      {/* Full-bleed fridge background */}
+      <Image source={{ uri: FRIDGE_URL }} style={styles.fridge} resizeMode="cover" />
+
+      {/* Collected magnets (draggable) */}
+      {hasUser && user?.magnets?.map((ccaa, idx) => {
+        const uri = MAGNETS[ccaa];
+        if (!uri) return null;
+        return (
+          <DraggableMagnet
+            key={`${user.id}-${ccaa}`}
+            uri={uri}
+            storageKey={`magnet_pos_${user.id}_${ccaa}`}
+            initial={defaultPosition(idx)}
+            size={100}
+          />
+        );
+      })}
+
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]} pointerEvents="box-none">
+        {/* Small logo, no background, over the fridge */}
+        <View style={styles.logoWrap} pointerEvents="none">
+          <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
         </View>
-        <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
-        <Image source={{ uri: FRIDGE_URL }} style={styles.fridge} resizeMode="cover" />
+
+        <View style={{ flex: 1 }} pointerEvents="box-none" />
+
         {hasUser ? (
-          <TouchableOpacity testID="enter-app-btn" style={styles.swipeHint} onPress={enterApp}>
-            <Text style={styles.swipeText}>Desliza hacia arriba</Text>
-            <View style={styles.swipeBar} />
-          </TouchableOpacity>
+          <View style={styles.bottomArea}>
+            <TouchableOpacity testID="enter-app-btn" style={styles.enterBtn} onPress={enterApp} activeOpacity={0.85}>
+              <Text style={styles.enterText}>Entrar</Text>
+            </TouchableOpacity>
+          </View>
         ) : hasUser === false ? (
-          <View style={styles.buttonsRow}>
-            <TouchableOpacity testID="login-btn" style={[styles.btn, styles.btnLight]} onPress={() => router.push("/login")}>
-              <Text style={styles.btnText}>Iniciar sesión</Text>
-            </TouchableOpacity>
-            <TouchableOpacity testID="register-btn" style={[styles.btn, styles.btnDark]} onPress={() => router.push("/register")}>
-              <Text style={[styles.btnText, { color: COLORS.white }]}>Regístrate</Text>
-            </TouchableOpacity>
+          <View style={styles.bottomArea}>
+            <View style={styles.buttonsRow}>
+              <TouchableOpacity testID="login-btn" style={[styles.btn, styles.btnLight]} onPress={() => router.push("/login")} activeOpacity={0.85}>
+                <Text style={styles.btnText}>Iniciar sesión</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="register-btn" style={[styles.btn, styles.btnDark]} onPress={() => router.push("/register")} activeOpacity={0.85}>
+                <Text style={[styles.btnText, { color: COLORS.white }]}>Regístrate</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : null}
       </SafeAreaView>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.white },
-  safe: { flex: 1, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20 },
-  magnetsRow: { flexDirection: "row", justifyContent: "space-around", width: "100%", paddingTop: 8, gap: 12 },
-  magnetSmall: { width: 60, height: 60 },
-  logo: { width: 180, height: 60, marginTop: 8 },
-  fridge: { width: "100%", flex: 1, marginVertical: 16 },
-  buttonsRow: { flexDirection: "row", gap: 12, width: "100%", paddingBottom: 24 },
-  btn: { flex: 1, paddingVertical: 16, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  btnLight: { backgroundColor: COLORS.grayLight },
+  root: { flex: 1, backgroundColor: COLORS.black },
+  fridge: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    height: "100%",
+  },
+  safe: { flex: 1, justifyContent: "space-between" },
+  logoWrap: { alignItems: "center", paddingTop: 6 },
+  logo: { width: 110, height: 36 },
+  bottomArea: { paddingHorizontal: 20, paddingBottom: 18, gap: 12 },
+  buttonsRow: { flexDirection: "row", gap: 12 },
+  btn: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnLight: { backgroundColor: "rgba(255,255,255,0.95)" },
   btnDark: { backgroundColor: COLORS.text },
   btnText: { fontSize: 15, fontWeight: "700", color: COLORS.text, letterSpacing: 0.3 },
-  swipeHint: { paddingBottom: 30, alignItems: "center", gap: 10 },
-  swipeText: { color: COLORS.textSoft, fontSize: 13, letterSpacing: 0.5 },
-  swipeBar: { width: 48, height: 4, backgroundColor: COLORS.text, borderRadius: 2 },
+  enterBtn: {
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.85)",
+    paddingHorizontal: 36,
+    paddingVertical: 14,
+    borderRadius: 30,
+  },
+  enterText: { color: COLORS.white, fontSize: 15, fontWeight: "700", letterSpacing: 0.5 },
 });

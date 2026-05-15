@@ -15,11 +15,21 @@ export const LOGO_URL = "https://customer-assets.emergentagent.com/job_82473c81-
 export const FRIDGE_URL = "https://customer-assets.emergentagent.com/job_82473c81-dafc-4adc-b4cd-0b023c12dd7a/artifacts/8g0yzxvf_frigowebinicio.jpg";
 
 export const MAGNETS: Record<string, string> = {
+  "Andalucía": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/wyybhfc5_ANDALUCIA%20IMAN.png",
   "Aragón": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/wwttan90_ARAGON.png",
   "Asturias": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/duajdjh0_asturias.png",
-  "Cataluña": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/vudp09mi_barcelona.png",
+  "Baleares": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/g0n45mhi_bareal.png",
+  "Canarias": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/hj0gex3l_gran%20canarias.png",
   "Cantabria": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/qo8vmfuh_cantabria%20iman.png",
+  "Castilla-La Mancha": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/twp2zbqv_castilla%20la%20mancha.png",
+  "Castilla y León": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/w0fgu3va_castilla%20y%20leon.png",
+  "Cataluña": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/vudp09mi_barcelona.png",
   "Extremadura": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/moder595_EXTREMADURA.png",
+  "Galicia": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/zto6joxr_galicia.png",
+  "La Rioja": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/hn7ecab4_IMAN%20LA%20RIOJA%20CERAMICA.png",
+  "Madrid": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/cmh3qen1_madrid2.png",
+  "Murcia": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/pzohg3h7_murcia.png",
+  "Navarra": "https://customer-assets.emergentagent.com/job_frigo-recipes-3/artifacts/j2om5p4x_navarra%20iman_.png",
 };
 
 export type User = { id: string; email: string; username: string; magnets: string[]; created_at: string };
@@ -57,6 +67,11 @@ export const api = {
   getCCAA: () => req("/ccaa"),
   earnMagnet: (user_id: string, ccaa: string, photo_base64?: string) =>
     req("/magnets/earn", { method: "POST", body: JSON.stringify({ user_id, ccaa, photo_base64 }) }),
+  cookRecipe: (recipe_id: string, user_id: string, photo_base64: string) =>
+    req(`/recipes/${recipe_id}/cook`, { method: "POST", body: JSON.stringify({ user_id, photo_base64 }) }),
+  getCooked: (user_id: string) => req(`/user/${user_id}/cooked`),
+  getCookedPhoto: (user_id: string, recipe_id: string) =>
+    req(`/user/${user_id}/cooked/${recipe_id}`),
   getCart: (user_id: string) => req(`/cart/${user_id}`),
   updateCart: (user_id: string, items: { name: string; quantity: number }[]) =>
     req("/cart", { method: "POST", body: JSON.stringify({ user_id, items }) }),

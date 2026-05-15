@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api, COLORS, MAGNETS, Recipe } from "@/src/lib/api";
+import { useCooked } from "@/src/lib/cooked";
 import { FrigoHeader, FrigoFooter } from "@/src/components/Chrome";
 
 function getSeason(): string {
@@ -29,6 +30,7 @@ export default function ParaTi() {
   const [filters, setFilters] = useState({ exclude_gluten: false, exclude_lactose: false, exclude_nuts: false, vegan: false });
   const [sortAsc, setSortAsc] = useState(true);
   const season = getSeason();
+  const { cookedIds, reload: reloadCooked } = useCooked();
 
   const load = async () => {
     if (tab === "parati") {
@@ -41,6 +43,7 @@ export default function ParaTi() {
   };
 
   useEffect(() => { load(); }, [tab, filters]);
+  useEffect(() => { reloadCooked(); }, []);
 
   const sorted = [...recipes].sort((a, b) => sortAsc ? a.nombre.localeCompare(b.nombre) : b.nombre.localeCompare(a.nombre));
 
@@ -61,15 +64,27 @@ export default function ParaTi() {
             <Text style={styles.h1}>Con productos de temporada</Text>
             <Text style={styles.sub}>{season} · {sorted.length} recetas</Text>
             <View style={{ gap: 12, marginTop: 16 }}>
-              {sorted.slice(0, 12).map(r => (
-                <TouchableOpacity key={r.id} testID={`recipe-${r.id}`} style={styles.card} onPress={() => router.push(`/recipe/${r.id}`)}>
-                  <View style={styles.cardThumb}><Text style={styles.cardThumbText}>{r.ccaa.slice(0, 3).toUpperCase()}</Text></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{r.nombre}</Text>
-                    <Text style={styles.cardMeta}>{r.ccaa} · {r.tiempo} · {r.dificultad}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {sorted.slice(0, 12).map(r => {
+                const done = cookedIds.has(r.id);
+                return (
+                  <TouchableOpacity key={r.id} testID={`recipe-${r.id}`} style={styles.card} onPress={() => router.push(`/recipe/${r.id}`)}>
+                    <View style={styles.cardThumb}>
+                      {done && MAGNETS[r.ccaa] ? (
+                        <Image source={{ uri: MAGNETS[r.ccaa] }} style={styles.cardThumbMagnet} resizeMode="contain" />
+                      ) : (
+                        <Text style={styles.cardThumbText}>{r.ccaa.slice(0, 3).toUpperCase()}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.cardTitleRow}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>{r.nombre}</Text>
+                        {done && <Ionicons name="checkmark-circle" size={16} color={COLORS.text} />}
+                      </View>
+                      <Text style={styles.cardMeta}>{r.ccaa} · {r.tiempo} · {r.dificultad}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         ) : (
@@ -125,9 +140,11 @@ const styles = StyleSheet.create({
   h1: { fontSize: 22, fontWeight: "800", color: COLORS.text, letterSpacing: -0.4 },
   sub: { fontSize: 13, color: COLORS.textSoft, marginTop: 4 },
   card: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.grayLight, padding: 14, borderRadius: 10, gap: 14 },
-  cardThumb: { width: 56, height: 56, backgroundColor: COLORS.gray, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  cardThumb: { width: 56, height: 56, backgroundColor: COLORS.gray, borderRadius: 8, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   cardThumbText: { fontWeight: "800", color: COLORS.text, letterSpacing: 1 },
-  cardTitle: { fontSize: 15, fontWeight: "700", color: COLORS.text },
+  cardThumbMagnet: { width: 50, height: 50 },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cardTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: COLORS.text },
   cardMeta: { fontSize: 12, color: COLORS.textSoft, marginTop: 2 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 16 },
   ccaaBox: { width: "31%", aspectRatio: 1, backgroundColor: COLORS.grayLight, borderRadius: 10, alignItems: "center", justifyContent: "center", padding: 6 },
