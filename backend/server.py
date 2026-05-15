@@ -1,0 +1,224 @@
+from fastapi import FastAPI, APIRouter, HTTPException
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+import logging
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional, Dict, Any
+
+from data.recipes_seed import RECIPES, CCAA_LIST
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+REGISTER_CODE = "0000"
+
+app = FastAPI()
+api_router = APIRouter(prefix="/api")
+
+# ---------- Models ----------
+class RegisterRequest(BaseModel):
+    code: str
+    email: EmailStr
+    username: str
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+
+class User(BaseModel):
+    id: str
+    email: str
+    username: str
+    magnets: List[str] = []
+    created_at: str
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+class CartItem(BaseModel):
+    name: str
+    quantity: int = 1
+
+class CartUpdate(BaseModel):
+    user_id: str
+    items: List[CartItem]
+
+class MagnetGain(BaseModel):
+    user_id: str
+    ccaa: str
+    photo_base64: Optional[str] = None
+
+# ---------- Startup ----------
+@app.on_event("startup")
+async def seed_recipes():
+    count = await db.recipes.count_documents({})
+    if count == 0:
+        for r in RECIPES:
+            r["id"] = str(uuid.uuid4())
+        await db.recipes.insert_many([dict(r) for r in RECIPES])
+        logging.info(f"Seeded {len(RECIPES)} recipes")
+
+# ---------- Routes ----------
+@api_router.get("/")
+async def root():
+    return {"message": "FRIGO API", "recipes": await db.recipes.count_documents({})}
+
+@api_router.post("/auth/register")
+async def register(req: RegisterRequest):
+    if req.code != REGISTER_CODE:
+        raise HTTPException(status_code=400, detail="Código incorrecto")
+    existing = await db.users.find_one({"email": req.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email ya registrado")
+    user = {
+        "id": str(uuid.uuid4()),
+        "email": req.email,
+        "username": req.username,
+        "magnets": [],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one(dict(user))
+    return user
+
+@api_router.post("/auth/login")
+async def login(req: LoginRequest):
+    user = await db.users.find_one({"email": req.email}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado. Regístrate primero.")
+    return user
+
+@api_router.get("/user/{user_id}")
+async def get_user(user_id: str):
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    return user
+
+@api_router.get("/recipes")
+async def list_recipes(
+    ccaa: Optional[str] = None,
+    season: Optional[str] = None,
+    exclude_gluten: bool = False,
+    exclude_lactose: bool = False,
+    exclude_nuts: bool = False,
+    vegan: bool = False,
+):
+    q: Dict[str, Any] = {}
+    if ccaa:
+        q["ccaa"] = ccaa
+    if season:
+        q["$or"] = [{"temporada": season}, {"temporada": "Todo el año"}]
+    if exclude_gluten:
+        q["alergenos.gluten"] = False
+    if exclude_lactose:
+        q["alergenos.lactosa"] = False
+    if exclude_nuts:
+        q["alergenos.frutos_secos"] = False
+    if vegan:
+        q["alergenos.apto_vegano"] = True
+    recipes = await db.recipes.find(q, {"_id": 0}).to_list(500)
+    return recipes
+
+@api_router.get("/recipes/{recipe_id}")
+async def get_recipe(recipe_id: str):
+    r = await db.recipes.find_one({"id": recipe_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(status_code=404, detail="Receta no encontrada")
+    return r
+
+@api_router.get("/ccaa")
+async def get_ccaa():
+    return {"ccaa": CCAA_LIST}
+
+@api_router.post("/magnets/earn")
+async def earn_magnet(req: MagnetGain):
+    user = await db.users.find_one({"id": req.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    magnets = user.get("magnets", [])
+    if req.ccaa not in magnets:
+        magnets.append(req.ccaa)
+        await db.users.update_one({"id": req.user_id}, {"$set": {"magnets": magnets}})
+    if req.photo_base64:
+        await db.photos.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": req.user_id,
+            "ccaa": req.ccaa,
+            "photo": req.photo_base64,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return {"magnets": magnets}
+
+@api_router.get("/cart/{user_id}")
+async def get_cart(user_id: str):
+    cart = await db.carts.find_one({"user_id": user_id}, {"_id": 0})
+    return cart or {"user_id": user_id, "items": []}
+
+@api_router.post("/cart")
+async def update_cart(req: CartUpdate):
+    items = [i.dict() for i in req.items]
+    await db.carts.update_one(
+        {"user_id": req.user_id},
+        {"$set": {"user_id": req.user_id, "items": items}},
+        upsert=True,
+    )
+    return {"user_id": req.user_id, "items": items}
+
+@api_router.post("/chat/message")
+async def chat_message(req: ChatRequest):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="LLM key no configurada")
+    system = (
+        "Eres el asistente culinario de FRIGO, una app española de recetas regionales. "
+        "Responde siempre en español, con tono cercano y minimalista. "
+        "Sugiere recetas de la cocina española por comunidad autónoma, temporada, o ingredientes. "
+        "Tienes acceso a recetas como Fabada Asturiana, Cocido Madrileño, Salmorejo, Paella, Pisto, "
+        "Marmitako, Bacalao al Pil-Pil, Cachopo, Tarta de Santiago, etc. Sé conciso (máx 4 frases)."
+    )
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=req.session_id,
+        system_message=system,
+    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+    msg = UserMessage(text=req.message)
+    try:
+        response = await chat.send_message(msg)
+    except Exception as e:
+        logging.error(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    await db.chat_messages.insert_many([
+        {"session_id": req.session_id, "role": "user", "text": req.message, "ts": datetime.now(timezone.utc).isoformat()},
+        {"session_id": req.session_id, "role": "assistant", "text": str(response), "ts": datetime.now(timezone.utc).isoformat()},
+    ])
+    return {"response": str(response), "session_id": req.session_id}
+
+@api_router.get("/chat/{session_id}")
+async def chat_history(session_id: str):
+    msgs = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("ts", 1).to_list(200)
+    return {"messages": msgs}
+
+app.include_router(api_router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
