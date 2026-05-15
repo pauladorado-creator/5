@@ -135,6 +135,7 @@ async def list_recipes(
     exclude_lactose: bool = False,
     exclude_nuts: bool = False,
     vegan: bool = False,
+    ingredients: Optional[str] = None,
 ):
     q: Dict[str, Any] = {}
     if ccaa:
@@ -150,6 +151,13 @@ async def list_recipes(
     if vegan:
         q["alergenos.apto_vegano"] = True
     recipes = await db.recipes.find(q, {"_id": 0}).to_list(500)
+    if ingredients:
+        terms = [t.strip().lower() for t in ingredients.split(",") if t.strip()]
+        if terms:
+            def matches(r):
+                blob = " ".join(r.get("ingredientes", [])).lower()
+                return all(t in blob for t in terms)
+            recipes = [r for r in recipes if matches(r)]
     return recipes
 
 @api_router.get("/recipes/{recipe_id}")

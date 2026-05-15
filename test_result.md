@@ -184,6 +184,21 @@ backend:
         -agent: "testing"
         -comment: "Iter4 PASS (11/11) on live preview URL. POST /api/auth/register {code:0000,email:iter4.test@frigo.app,username:iter4} → 200 id=48a72db4-…. Galicia first recipe = 'Empanada Gallega' (id df585fa4-…). POST /api/recipes/{rid}/save → 200 {ok:true,saved:true,recipe_id:…}; repeating the call is idempotent (still 200, same body). GET /api/user/{uid}/saved → recipe_ids=[rid] and recipes[0] hydrated with image_url='/api/static/recipes/recipe_34.jpg' and precio=5.0. DELETE /api/recipes/{rid}/save?user_id={uid} → 200 {ok:true,saved:false,deleted:1}. Subsequent GET /api/user/{uid}/saved → recipe_ids=[] (rid removed). Re-POST save after delete → 200 {saved:true}. GET /api/static/recipes/recipe_01.jpg → 200 image/jpeg, 88556 bytes (re-processed images served fine). GET /api/ → recipes=50. GET /api/ccaa → 17 entries, Ceuta/Melilla absent. No regressions."
 
+  - task: "Ingredients filter on GET /api/recipes (iter5)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "New optional query param `ingredients` (comma-separated). Applied client-side after Mongo query: every term must appear (case-insensitive substring) in the joined `ingredientes` array. Combinable with `ccaa`."
+        -working: true
+        -agent: "testing"
+        -comment: "Iter5 PASS (11/11) on live preview URL. (1) GET /api/recipes?ingredients=tomate → 16 recipes, every one contains 'tomate' (sample: Salmorejo Cordobés). (2) GET /api/recipes?ingredients=tomate,ajo → 14 recipes, every one contains BOTH terms (subset of #1, as expected). (3) GET /api/recipes?ingredients=plutoniumXYZ → 200 with [] empty array. (4) GET /api/recipes?ccaa=Madrid&ingredients=patata → 200 with 1 recipe ['Cocido Madrileño'], correctly intersecting CCAA + ingredient filter. (5) Re-processed photos all serve: /api/static/recipes/recipe_30.jpg (80461 B), recipe_37.jpg (174278 B), recipe_38.jpg (192099 B), recipe_45.jpg (149262 B), recipe_47.jpg (170341 B) — all 200 image/jpeg. (6) Smoke GET /api/ → recipes=50; POST /api/auth/login {email:iter4.test@frigo.app} → 200 id=48a72db4-ce3a-47cd-a2ef-2c9544030e2b. No regressions."
+
 frontend:
   - task: "Splash screen full-bleed fridge + small logo + no default magnets"
     implemented: true
@@ -253,12 +268,22 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Save / Unsave recipe endpoints (iter4)"
+    - "Ingredients filter on GET /api/recipes (iter5)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    -agent: "testing"
+    -message: |
+      Iter5 quick regression PASS (11/11) on https://frigo-recipes-3.preview.emergentagent.com.
+        - GET /api/recipes?ingredients=tomate → 16 recipes; every result's `ingredientes` joined contains "tomate" (case-insensitive). Sample: "Salmorejo Cordobés".
+        - GET /api/recipes?ingredients=tomate,ajo → 14 recipes, each containing BOTH terms (proper subset of the previous result, confirming AND semantics).
+        - GET /api/recipes?ingredients=plutoniumXYZ → 200 with [] (empty array as expected).
+        - GET /api/recipes?ccaa=Madrid&ingredients=patata → 200, 1 recipe ["Cocido Madrileño"]; correctly intersects CCAA filter with ingredient filter.
+        - Re-processed photos: /api/static/recipes/recipe_30.jpg (80461 B), recipe_37.jpg (174278 B), recipe_38.jpg (192099 B), recipe_45.jpg (149262 B), recipe_47.jpg (170341 B) — all 200 image/jpeg.
+        - Smoke: GET /api/ → recipes=50; POST /api/auth/login {email:"iter4.test@frigo.app"} → 200, id=48a72db4-ce3a-47cd-a2ef-2c9544030e2b.
+      No regressions detected. backend_test.py rewritten for iter5 checks.
     -agent: "testing"
     -message: |
       Iter4 quick regression PASS (11/11) on https://frigo-recipes-3.preview.emergentagent.com.
