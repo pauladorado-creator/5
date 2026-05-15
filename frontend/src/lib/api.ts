@@ -33,12 +33,15 @@ export const MAGNETS: Record<string, string> = {
 };
 
 export type User = { id: string; email: string; username: string; magnets: string[]; created_at: string };
+export type IntoleranceMode = "hide" | "warn" | "substitute";
 export type Recipe = {
   id: string; nombre: string; ccaa: string; tiempo: string; dificultad: string;
   raciones: string; temporada: string; descripcion: string;
+  precio?: number; favoritos?: number;
   ingredientes: string[]; preparacion: string[];
   alergenos: { gluten: boolean; lactosa: boolean; frutos_secos: boolean; apto_vegano: boolean };
 };
+export type CartItem = { name: string; quantity: number; recipe_name?: string; kind?: "recipe" | "personal" };
 
 async function req(path: string, opts: RequestInit = {}) {
   const r = await fetch(`${BASE}/api${path}`, {

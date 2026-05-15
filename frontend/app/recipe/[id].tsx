@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -6,6 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { api, COLORS, getStoredUser, MAGNETS, Recipe, setStoredUser } from "@/src/lib/api";
 import { useCooked } from "@/src/lib/cooked";
+import { useSettings } from "@/src/lib/settings";
+import { allergenLabels, substituteIngredient } from "@/src/lib/substitutions";
 
 export default function RecipeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,6 +16,28 @@ export default function RecipeDetail() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const { cookedIds, reload: reloadCooked, addCooked } = useCooked();
+  const { filters } = useSettings();
+
+  // Allergen relevant for current user setup.
+  const userAllergens = useMemo(() => {
+    if (!r) return [] as string[];
+    const out: string[] = [];
+    if (filters.exclude_gluten && r.alergenos.gluten) out.push("gluten");
+    if (filters.exclude_lactose && r.alergenos.lactosa) out.push("lactosa");
+    if (filters.exclude_nuts && r.alergenos.frutos_secos) out.push("frutos secos");
+    return out;
+  }, [r, filters]);
+
+  const allAllergens = useMemo(() => r ? allergenLabels(r.alergenos) : [], [r]);
+
+  const subMode = useMemo(() => ({
+    gluten: filters.mode === "substitute" && filters.exclude_gluten,
+    lactose: filters.mode === "substitute" && filters.exclude_lactose,
+    nuts: filters.mode === "substitute" && filters.exclude_nuts,
+    vegan: filters.mode === "substitute" && filters.vegan,
+  }), [filters]);
+
+  const showWarnBanner = filters.mode === "warn" && userAllergens.length > 0;
 
   useEffect(() => {
     if (!id) return;
@@ -36,7 +60,10 @@ export default function RecipeDetail() {
     if (!u) return Alert.alert("FRIGO", "Inicia sesión");
     const current = await api.getCart(u.id);
     const items = [...(current.items || [])];
-    r.ingredientes.forEach(ing => items.push({ name: ing, quantity: 1 }));
+    r.ingredientes.forEach(ing => {
+      const sub = substituteIngredient(ing, subMode);
+      items.push({ name: sub.line, quantity: 1, recipe_name: r.nombre, kind: "recipe" });
+    });
     await api.updateCart(u.id, items);
     Alert.alert("FRIGO", "Ingredientes añadidos a la cesta");
   };
@@ -161,7 +188,15 @@ export default function RecipeDetail() {
           {r.alergenos.apto_vegano && <View style={styles.tag}><Text style={styles.tagText}>Vegano</Text></View>}
         </View>
         <Text style={styles.h2}>Ingredientes</Text>
-        {r.ingredientes.map((i, idx) => <Text key={idx} style={styles.li}>· {i}</Text>)}
+        {r.ingredientes.map((i, idx) => {
+          const sub = substituteIngredient(i, subMode);
+          return (
+            <View key={idx} style={styles.ingRow}>
+              <Text style={[styles.li, sub.changed && styles.liChanged]}>· {sub.line}</Text>
+              {sub.changed && <Text style={styles.subTag}>sustituido</Text>}
+            </View>
+          );
+        })}
         <TouchableOpacity testID="add-cart" style={styles.btn} onPress={addAllToCart}>
           <Text style={styles.btnText}>Añadir a la cesta</Text>
         </TouchableOpacity>
@@ -190,7 +225,12 @@ const styles = StyleSheet.create({
   tag: { backgroundColor: COLORS.grayLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
   tagText: { fontSize: 12, color: COLORS.text, fontWeight: "600" },
   h2: { fontSize: 18, fontWeight: "800", color: COLORS.text, marginTop: 12 },
-  li: { fontSize: 14, color: COLORS.text, lineHeight: 22 },
+  li: { fontSize: 14, color: COLORS.text, lineHeight: 22, flex: 1 },
+  liChanged: { color: "#0E7C66", fontWeight: "700" },
+  ingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  subTag: { fontSize: 10, fontWeight: "800", color: "#0E7C66", backgroundColor: "#D9F2EB", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, textTransform: "uppercase", letterSpacing: 0.4, overflow: "hidden" },
+  warnBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#D92D20", paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10 },
+  warnBannerText: { color: COLORS.white, flex: 1, fontWeight: "700", fontSize: 13 },
   btn: { backgroundColor: COLORS.text, padding: 14, borderRadius: 10, alignItems: "center", marginVertical: 8 },
   btnText: { color: COLORS.white, fontWeight: "700" },
   step: { flexDirection: "row", gap: 12, marginBottom: 8 },
@@ -206,6 +246,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   uploadText: { color: COLORS.white, fontSize: 15, fontWeight: "700", letterSpacing: 0.3 },
+  warnBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#D92D20",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  warnBannerText: { color: COLORS.white, flex: 1, fontWeight: "700", fontSize: 13 },
+  ingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  liChanged: { color: "#0E7C66", fontWeight: "700" },
+  subTag: { fontSize: 10, fontWeight: "800", color: "#0E7C66", backgroundColor: "#D9F2EB", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, textTransform: "uppercase", letterSpacing: 0.4 },
   photoCard: { position: "relative", borderRadius: 14, overflow: "hidden", backgroundColor: COLORS.grayLight },
   photo: { width: "100%", aspectRatio: 1 },
   photoOverlay: {

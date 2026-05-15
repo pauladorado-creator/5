@@ -249,6 +249,16 @@ test_plan:
 agent_communication:
     -agent: "testing"
     -message: |
+      Iter2 regression PASS (9/9) on https://frigo-recipes-3.preview.emergentagent.com.
+        - GET /api/ → recipes=48 (confirmed reseed from 38→48; backend log shows "Reseeded 48 recipes (version 2)").
+        - POST /api/auth/register {code:"0000", email:"iter2.test@frigo.app", username:"iter2"} → 200 (id=c2d42758-...). Fallback to /auth/login implemented but not needed this run.
+        - POST /api/cart NEW shape with kind+recipe_name → 200; GET /api/cart/{id} returns BOTH items with kind ("recipe"/"personal") and recipe_name preserved exactly ("Salmorejo Cordobés" / null).
+        - POST /api/cart OLD shape {name, quantity} → 200; GET round-trip shows item normalized with kind defaulting to "recipe" and recipe_name=null. Back-compat works (CartItem model has defaults kind="recipe", recipe_name=None).
+        - GET /api/recipes?ccaa=Murcia → 3 recipes: Ensalada Murciana, Caldero del Mar Menor, Paparajotes. Each includes precio (float, e.g. 3.25) and favoritos (int, 0). All Murcia recipes validated.
+        - POST /api/recipes/{id}/cook with photo on a Murcia recipe → 200, body {ok:true, ccaa:"Murcia", cooked_in_ccaa:1, total_in_ccaa:3, awarded_magnet:false, magnets:[]}. Cook endpoint still works as expected.
+      No issues found. backend_test.py updated for iter2 checks.
+    -agent: "testing"
+    -message: |
       Backend regression + new endpoints all PASS (16/16) on the live preview URL.
       Highlights:
         - Created user backend.test@frigo.app via /api/auth/register (code 0000) and re-logged in.

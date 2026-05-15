@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 
-from data.recipes_seed import RECIPES, CCAA_LIST
+from data.recipes_seed import RECIPES, CCAA_LIST, SEED_VERSION
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
@@ -49,6 +49,8 @@ class ChatRequest(BaseModel):
 class CartItem(BaseModel):
     name: str
     quantity: int = 1
+    recipe_name: Optional[str] = None
+    kind: str = "recipe"  # or "personal"
 
 class CartUpdate(BaseModel):
     user_id: str
@@ -66,12 +68,23 @@ class CookRequest(BaseModel):
 # ---------- Startup ----------
 @app.on_event("startup")
 async def seed_recipes():
+    meta = await db.app_meta.find_one({"key": "seed_version"})
+    current_version = meta["value"] if meta else 0
     count = await db.recipes.count_documents({})
-    if count == 0:
+    if count == 0 or current_version != SEED_VERSION:
+        await db.recipes.delete_many({})
         for r in RECIPES:
             r["id"] = str(uuid.uuid4())
         await db.recipes.insert_many([dict(r) for r in RECIPES])
-        logging.info(f"Seeded {len(RECIPES)} recipes")
+        await db.app_meta.update_one(
+            {"key": "seed_version"},
+            {"$set": {"value": SEED_VERSION}},
+            upsert=True,
+        )
+        # Reset cooked records & user magnets because recipe ids changed.
+        await db.cooked_recipes.delete_many({})
+        await db.users.update_many({}, {"$set": {"magnets": []}})
+        logging.info(f"Reseeded {len(RECIPES)} recipes (version {SEED_VERSION})")
 
 # ---------- Routes ----------
 @api_router.get("/")
