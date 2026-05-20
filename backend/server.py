@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 
 from data.recipes_seed import RECIPES, CCAA_LIST, SEED_VERSION
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -301,31 +300,33 @@ async def update_cart(req: CartUpdate):
 
 @api_router.post("/chat/message")
 async def chat_message(req: ChatRequest):
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(status_code=500, detail="LLM key no configurada")
+    import anthropic
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="API key no configurada")
+    client_ai = anthropic.Anthropic(api_key=api_key)
     system = (
         "Eres el asistente culinario de FRIGO, una app española de recetas regionales. "
         "Responde siempre en español, con tono cercano y minimalista. "
         "Sugiere recetas de la cocina española por comunidad autónoma, temporada, o ingredientes. "
-        "Tienes acceso a recetas como Fabada Asturiana, Cocido Madrileño, Salmorejo, Paella, Pisto, "
-        "Marmitako, Bacalao al Pil-Pil, Cachopo, Tarta de Santiago, etc. Sé conciso (máx 4 frases)."
+        "Sé conciso (máx 4 frases)."
     )
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=req.session_id,
-        system_message=system,
-    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-    msg = UserMessage(text=req.message)
     try:
-        response = await chat.send_message(msg)
+        message = client_ai.messages.create(
+            model="claude-sonnet-4-5-20250514",
+            max_tokens=1024,
+            system=system,
+            messages=[{"role": "user", "content": req.message}]
+        )
+        response = message.content[0].text
     except Exception as e:
         logging.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     await db.chat_messages.insert_many([
         {"session_id": req.session_id, "role": "user", "text": req.message, "ts": datetime.now(timezone.utc).isoformat()},
-        {"session_id": req.session_id, "role": "assistant", "text": str(response), "ts": datetime.now(timezone.utc).isoformat()},
+        {"session_id": req.session_id, "role": "assistant", "text": response, "ts": datetime.now(timezone.utc).isoformat()},
     ])
-    return {"response": str(response), "session_id": req.session_id}
+    return {"response": response, "session_id": req.session_id}
 
 @api_router.get("/chat/{session_id}")
 async def chat_history(session_id: str):
